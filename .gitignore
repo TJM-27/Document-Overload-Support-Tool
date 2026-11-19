@@ -1,0 +1,7 @@
+lib/
+work/
+samples/DOST_Sample_*/
+samples/smoke-export*/
+samples/wrapped-test/
+samples/mixed-root-test/
+samples/*.zip
