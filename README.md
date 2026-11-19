@@ -1,5 +1,7 @@
 # DOST Zip Document GUI
 
+Tool used to organize large file dumps into combined PDF and XLS documents so they are easier to review.
+
 `DOST-ZipDocumentGui.ps1` is a Windows PowerShell 5.1 WinForms tool for reviewing and exporting documents from a zip file or an already-extracted folder. `DOST.exe` is a small launcher for the GUI.
 
 ## What It Does
