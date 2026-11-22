@@ -323,6 +323,65 @@ function Test-ZipReadable {
     }
 }
 
+function Test-PathInsideDirectory {
+    param(
+        [Parameter(Mandatory)][string]$RootPath,
+        [Parameter(Mandatory)][string]$CandidatePath
+    )
+
+    $rootFull = [System.IO.Path]::GetFullPath($RootPath)
+    if (-not $rootFull.EndsWith([System.IO.Path]::DirectorySeparatorChar) -and
+        -not $rootFull.EndsWith([System.IO.Path]::AltDirectorySeparatorChar)) {
+        $rootFull += [System.IO.Path]::DirectorySeparatorChar
+    }
+
+    $candidateFull = [System.IO.Path]::GetFullPath($CandidatePath)
+    return $candidateFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Expand-ZipArchiveInsideDirectory {
+    param(
+        [Parameter(Mandatory)][string]$ZipPath,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        $destinationFull = [System.IO.Path]::GetFullPath($Destination)
+
+        foreach ($entry in $archive.Entries) {
+            $entryName = [string]$entry.FullName
+            if ([string]::IsNullOrWhiteSpace($entryName)) {
+                continue
+            }
+
+            $relativePath = $entryName.Replace('/', [System.IO.Path]::DirectorySeparatorChar).Replace('\', [System.IO.Path]::DirectorySeparatorChar)
+            if ([System.IO.Path]::IsPathRooted($relativePath)) {
+                throw "Zip entry path escapes the extraction folder: $entryName"
+            }
+
+            $targetPath = [System.IO.Path]::GetFullPath((Join-Path $destinationFull $relativePath))
+
+            if (-not (Test-PathInsideDirectory -RootPath $destinationFull -CandidatePath $targetPath)) {
+                throw "Zip entry path escapes the extraction folder: $entryName"
+            }
+
+            if ($entryName.EndsWith('/') -or $entryName.EndsWith('\')) {
+                New-DirectoryIfMissing -Path $targetPath
+                continue
+            }
+
+            $targetDirectory = Split-Path -Parent $targetPath
+            New-DirectoryIfMissing -Path $targetDirectory
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $false)
+        }
+    } finally {
+        if ($null -ne $archive) {
+            $archive.Dispose()
+        }
+    }
+}
+
 function Expand-ZipFileSafe {
     param(
         [Parameter(Mandatory)][string]$ZipPath,
@@ -341,7 +400,7 @@ function Expand-ZipFileSafe {
 
     New-DirectoryIfMissing -Path $Destination
     try {
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $Destination)
+        Expand-ZipArchiveInsideDirectory -ZipPath $ZipPath -Destination $Destination
     } catch {
         if ($IsSourceZip) {
             throw "The selected zip opened, but extraction failed: $ZipPath`r`n`r`nDetails: $($_.Exception.Message)"
